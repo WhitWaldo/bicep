@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using Bicep.Core;
 using Bicep.Core.Parser;
+using Bicep.Core.Resources;
 using Bicep.Core.SemanticModel;
 using Bicep.Core.TypeSystem;
 using Bicep.LanguageServer.Snippets;
@@ -29,16 +30,12 @@ namespace Bicep.LanguageServer.Completions
                 InsertText = IsPropertyNameEscapingRequired(property) ? StringUtils.EscapeBicepString(property.Name) : property.Name,
                 CommitCharacters = PropertyCommitChars,
                 Detail = FormatPropertyDetail(property),
-                Documentation = new StringOrMarkupContent(new MarkupContent
-                {
-                    Kind = MarkupKind.Markdown,
-                    Value = FormatPropertyDocumentation(property)
-                }),
+                Documentation = CreateDocumentation(FormatPropertyDocumentation(property)),
                 Preselect = preselect,
                 SortText = GetSortText(property.Name, priority)
             };
 
-        public static CompletionItem CreatePlaintextCompletion(CompletionItemKind kind, string insertText, string detail, bool preselect = false, CompletionPriority priority = CompletionPriority.Medium, Container<string>? commitCharacters = null) =>
+        public static CompletionItem CreatePlaintextCompletion(CompletionItemKind kind, string insertText, string? detail, bool preselect = false, CompletionPriority priority = CompletionPriority.Medium, Container<string>? commitCharacters = null) =>
             new CompletionItem
             {
                 Kind = kind,
@@ -71,6 +68,15 @@ namespace Bicep.LanguageServer.Completions
 
         public static CompletionItem CreateTypeCompletion(TypeSymbol type, bool preselect = false, CompletionPriority priority = CompletionPriority.Medium) => CreatePlaintextCompletion(CompletionItemKind.Class, type.Name, type.Name, preselect, priority);
 
+        public static CompletionItem CreateResourceTypeCompletion(ResourceTypeReference resourceType)
+        {
+            var insertText = StringUtils.EscapeBicepString($"{resourceType.FullyQualifiedType}@{resourceType.ApiVersion}");
+            var completion = CreatePlaintextCompletion(CompletionItemKind.Class, insertText, null);
+            completion.Documentation = CreateDocumentation($"Namespace: `{resourceType.Namespace}`{MarkdownNewLine}Type: `{resourceType.TypesString}`{MarkdownNewLine}API Version: `{resourceType.ApiVersion}`");
+
+            return completion;
+        }
+
         /// <summary>
         /// Creates a completion with a contextual snippet. This will look like a snippet to the user.
         /// </summary>
@@ -82,11 +88,7 @@ namespace Bicep.LanguageServer.Completions
                 InsertTextFormat = InsertTextFormat.Snippet,
                 InsertText = snippet,
                 Detail = detail,
-                Documentation = new StringOrMarkupContent(new MarkupContent
-                {
-                    Kind = MarkupKind.Markdown,
-                    Value = $"```bicep\n{new Snippet(snippet).FormatDocumentation()}\n```"
-                }),
+                Documentation = CreateDocumentation($"```bicep\n{new Snippet(snippet).FormatDocumentation()}\n```"),
                 Preselect = preselect,
                 SortText = GetSortText(label, priority)
             };
@@ -169,6 +171,15 @@ namespace Bicep.LanguageServer.Completions
         }
 
         // the priority must be a number in the sort text
+        private static StringOrMarkupContent CreateDocumentation(string markdown)
+        {
+            return new StringOrMarkupContent(new MarkupContent
+            {
+                Kind = MarkupKind.Markdown,
+                Value = markdown
+            });
+        }
+
         private static string GetSortText(string label, CompletionPriority priority) => $"{(int)priority}_{label}";
     }
 }
