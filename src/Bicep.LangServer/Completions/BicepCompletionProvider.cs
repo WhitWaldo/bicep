@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Bicep.Core;
@@ -122,7 +123,21 @@ namespace Bicep.LanguageServer.Completions
                 return Enumerable.Empty<CompletionItem>();
             }
 
-            return model.ResourceTypeProvider.GetAvailableTypes().Select(CompletionItemFactory.CreateResourceTypeCompletion);
+            // we need to ensure that Microsoft.Compute/virtualMachines@whatever comes before Microsoft.Compute/virtualMachines/extensions@whatever
+            // similarly, newest api versions should be shown first
+            var completions = model.ResourceTypeProvider.GetAvailableTypes()
+                .OrderBy(rt => rt.FullyQualifiedType, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(rt => rt.ApiVersion)
+                .Select(CompletionItemFactory.CreateResourceTypeCompletion)
+                .ToList();
+            
+            for (int i = 0; i < completions.Count; i++)
+            {
+                // 8 hex digits is probably overkill :)
+                completions[i].SortText = i.ToString("x8");
+            }
+
+            return completions;
         }
 
         private static IEnumerable<CompletionItem> GetParameterTypeSnippets()
